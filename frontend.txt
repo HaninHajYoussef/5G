@@ -1,0 +1,297 @@
+import requests
+import streamlit as st
+import base64
+
+API_URL = "http://127.0.0.1:8000"  # Assurez-vous que votre API FastAPI fonctionne sur cette adresse
+
+def get_image_base64(path):
+    with open(path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
+
+# Initialiser st.session_state avec une valeur par défaut si nécessaire
+if 'page' not in st.session_state:
+    st.session_state.page = 'login'  # Valeur par défaut
+
+# Définir les styles CSS
+st.markdown("""
+    <style>
+        .stApp {
+            background-color:#99ccff;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+
+#CSS : bleu calme et position image
+def login_page():
+    logo_base64 = get_image_base64("logo.tt.png")
+
+    # Logo + Titre bien espacés et logo plus gros
+    st.markdown(f"""
+        <style>
+            .login-header {{
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 40px;
+            }}
+            .login-header img {{
+                width: 200px;
+                margin-right: 30px;
+
+            }}
+            .login-header h2 {{
+                color: #003366;
+                font-size: 55px;
+                margin: 0;
+            }}
+            .stTextInput > div > div {{
+                margin: 5 auto;
+                width: 700px;
+            }}
+            .stTextInput input {{
+                text-align: left;
+            }}
+            .stButton > button {{
+                background-color: white;
+                color: #003366;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: bold;
+                display: block;
+                margin: 20px auto;
+                border: 1px solid #003366;
+            }}
+        </style>
+
+        <div class="login-header">
+            <img src="data:image/png;base64,{logo_base64}" />
+            <h2>Connexion</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Champs identifiants
+    username = st.text_input("Nom d'utilisateur")
+    password = st.text_input("Mot de passe", type="password")
+
+    # Bouton de connexion
+    if st.button("Se connecter"):
+        response = requests.post(f"{API_URL}/login/", json={"username": username, "password": password})
+
+        if response.status_code == 200:
+            st.session_state.authenticated = True
+            st.session_state.username = username
+            st.session_state.page = "tx_power"
+            st.success("Connexion réussie !")
+            st.rerun()
+        else:
+            st.error("Identifiants incorrects.")
+
+
+# Fonction de page de calcul du Tx Power
+def tx_power_page():
+    st.title("📶 Calcul du Tx Power")
+
+    tx_power = st.number_input("Tx Power (dBm)", value=21.0)
+    tx_antenna_gain = st.number_input("Tx Antenna Gain (dBi)", value=0.0)
+    cable_losses = st.number_input("Cable and Combiner Losses (dB)", value=0.0)
+
+    if "tx_result_shown" not in st.session_state:
+        st.session_state.tx_result_shown = False
+
+    if st.button("Calculer"):
+        st.session_state.tx_power = tx_power
+        st.session_state.tx_antenna_gain = tx_antenna_gain
+        st.session_state.cable_losses = cable_losses
+
+        result = tx_power + tx_antenna_gain - cable_losses
+        st.session_state.tx_result = result
+        st.session_state.tx_result_shown = True
+
+    if st.session_state.tx_result_shown:
+        st.success(f"Résultat Tx Power total : {st.session_state.tx_result} dBm")
+
+        if st.button("Suivant"):
+            st.session_state.page = "thermal_noise"
+            st.session_state.tx_result_shown = False
+            st.rerun()
+
+
+# Fonction de page de calcul du Thermal Noise Density
+def thermal_noise_page():
+    st.title("📶 Calcul du Thermal Noise Density")
+
+    thermal_noise_density = st.number_input("Thermal Noise Density (dBm/Hz)", value=-174.0)
+    bandwidth_factor = st.number_input("Bandwidth Factor", value=53.01)
+    noise_figure = st.number_input("Noise Figure (dB)", value=4.0)
+    interference_to_noise = st.number_input("Interference to Thermal Noise (dB)", value=6.99)
+
+    if "thermal_result_shown" not in st.session_state:
+        st.session_state.thermal_result_shown = False
+
+    if st.button("Calculer"):
+        st.session_state.thermal_noise_density = thermal_noise_density
+        st.session_state.bandwidth_factor = bandwidth_factor
+        st.session_state.noise_figure = noise_figure
+        st.session_state.interference_to_noise = interference_to_noise
+
+        result = thermal_noise_density + bandwidth_factor - noise_figure + interference_to_noise
+        st.session_state.thermal_result = result
+        st.session_state.thermal_result_shown = True
+
+    if st.session_state.thermal_result_shown:
+        st.success(f"Résultat Thermal Noise Density total : {st.session_state.thermal_result} dBm")
+
+        if st.button("Suivant"):
+            st.session_state.page = "rx_antenna_gain"
+            st.session_state.thermal_result_shown = False
+            st.rerun()
+
+
+# Fonction de page de calcul du Rx Antenna Gain
+def rx_antenna_gain_page():
+    st.title("📶 Calcul du Rx Antenna Gain")
+
+    rx_antenna_gain = st.number_input("Rx Antenna Gain (dBi)", value=10.0)
+    cable_feeder_loss = st.number_input("Cable/Feeder Loss (dB)", value=-2.0)
+    diversity_gain = st.number_input("Diversity Gain (dB)", value=0.0)
+
+    if "rx_result_shown" not in st.session_state:
+        st.session_state.rx_result_shown = False
+
+    if st.button("Calculer"):
+        st.session_state.rx_antenna_gain = rx_antenna_gain
+        st.session_state.cable_feeder_loss = cable_feeder_loss
+        st.session_state.diversity_gain = diversity_gain
+
+        result = rx_antenna_gain - cable_feeder_loss + diversity_gain
+        st.session_state.rx_result = result
+        st.session_state.rx_result_shown = True
+
+    if st.session_state.rx_result_shown:
+        st.success(f"Résultat Rx Antenna Gain total : {st.session_state.rx_result} dBi")
+
+        if st.button("Suivant"):
+            st.session_state.page = "fading_margin"
+            st.session_state.rx_result_shown = False
+            st.rerun()
+
+
+# Fonction de page de calcul du Fading Margin
+def fading_margin_page():
+    st.title("📶 Calcul de Fading Margin")
+
+    fading_margin_cell_edge = st.number_input("Fading Margin - Cell Edge (dB)", value=-1.04)
+    soft_handover_gain = st.number_input("Soft Handover Gain (dB)", value=2.0)
+    penetration_loss = st.number_input("Building/Car Penetration Loss (dB)", value=-15.0)
+
+    if "fading_result_shown" not in st.session_state:
+        st.session_state.fading_result_shown = False
+
+    if st.button("Calculer"):
+        st.session_state.fading_margin_cell_edge = fading_margin_cell_edge
+        st.session_state.soft_handover_gain = soft_handover_gain
+        st.session_state.penetration_loss = penetration_loss
+
+        result = fading_margin_cell_edge + soft_handover_gain + penetration_loss
+        st.session_state.fading_result = result
+        st.session_state.fading_result_shown = True
+
+    if st.session_state.fading_result_shown:
+        st.success(f"Résultat Fading Margin total : {st.session_state.fading_result} dB")
+
+        if st.button("Suivant"):
+            st.session_state.page = "cell_radius"
+            st.session_state.fading_result_shown = False
+            st.rerun()
+
+
+# Fonction de page de calcul du Rayon de Cellule
+def cell_radius_page():
+    st.title("📶 Calcul du Rayon de Cellule")
+
+    bs_height = st.number_input("Base Station Height (m)", value=25.0)
+    ue_height = st.number_input("User Equipment Height (m)", value=1.5)
+    decay_law = st.number_input("Decay Law (n)", value=3.57)
+
+    if "cell_result_shown" not in st.session_state:
+        st.session_state.cell_result_shown = False
+
+    if st.button("Calculer"):
+        st.session_state.bs_height = bs_height
+        st.session_state.ue_height = ue_height
+        st.session_state.decay_law = decay_law
+
+        result = bs_height + ue_height * decay_law
+        st.session_state.cell_result = result
+        st.session_state.cell_result_shown = True
+
+    if st.session_state.cell_result_shown:
+        st.success(f"Résultat Cell Radius total : {st.session_state.cell_result} m")
+
+        if st.button("Suivant"):
+            st.session_state.page = "summary"
+            st.session_state.cell_result_shown = False
+            st.rerun()
+
+
+# Page de résumé des résultats
+# Page de résumé des résultats
+def summary_page():
+    st.title("📊 Résumé des résultats")
+
+    st.write(f"📡 **Tx Power** : {st.session_state.tx_power} dBm")
+    st.write(f"📡 **Thermal Noise Density** : {st.session_state.thermal_noise_density} dBm")
+    st.write(f"📡 **Rx Antenna Gain** : {st.session_state.rx_antenna_gain} dBi")
+    st.write(f"📡 **Fading Margin** : {st.session_state.fading_margin_cell_edge} dB")
+    st.write(f"📡 **Cell Radius** : {st.session_state.bs_height} m / {st.session_state.ue_height} m")
+
+    if st.button("Calculer Link Budget"):
+        payload = {
+            "tx_power": st.session_state.tx_power,
+            "tx_antenna_gain": st.session_state.tx_antenna_gain,
+            "cable_losses": st.session_state.cable_losses,
+            "thermal_noise_density": st.session_state.thermal_noise_density,
+            "bandwidth_factor": st.session_state.bandwidth_factor,
+            "noise_figure": st.session_state.noise_figure,
+            "interference_to_noise": st.session_state.interference_to_noise,
+            "rx_antenna_gain": st.session_state.rx_antenna_gain,
+            "cable_feeder_loss": st.session_state.cable_feeder_loss,
+            "diversity_gain": st.session_state.diversity_gain,
+            "fading_margin_cell_edge": st.session_state.fading_margin_cell_edge,
+            "soft_handover_gain": st.session_state.soft_handover_gain,
+            "penetration_loss": st.session_state.penetration_loss,
+            "bs_height": st.session_state.bs_height,
+            "ue_height": st.session_state.ue_height,
+            "decay_law": st.session_state.decay_law,
+        }
+        
+        response = requests.post(f"{API_URL}/calculate/", json=payload)
+
+        if response.status_code == 200:
+            result = response.json()
+            st.success("✅ Link Budget calculé avec succès !")
+            st.write(result)
+        else:
+            st.error("❌ Erreur lors du calcul du Link Budget")
+
+    if st.button("Recommencer"):
+        st.session_state.page = "tx_power"  # Revenir à la première page
+        st.rerun()
+
+# Choisir quelle page afficher en fonction de l'état de la session
+if st.session_state.page == "login":
+    login_page()
+elif st.session_state.page == "tx_power":
+    tx_power_page()
+elif st.session_state.page == "thermal_noise":
+    thermal_noise_page()
+elif st.session_state.page == "rx_antenna_gain":
+    rx_antenna_gain_page()
+elif st.session_state.page == "fading_margin":
+    fading_margin_page()
+elif st.session_state.page == "cell_radius":
+    cell_radius_page()
+else:
+    summary_page() 

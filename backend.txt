@@ -1,0 +1,76 @@
+from fastapi import FastAPI, HTTPException, Depends
+from pydantic import BaseModel
+import os
+from database import verify_user
+import math
+
+app = FastAPI()
+
+# Modèle de connexion utilisateur
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+# Modèle des paramètres du Link Budget
+class LinkBudgetParams(BaseModel):
+    tx_power: float
+    tx_antenna_gain: float
+    cable_losses: float
+    thermal_noise_density: float
+    bandwidth_factor: float
+    noise_figure: float
+    interference_to_noise: float
+    rx_antenna_gain: float
+    cable_feeder_loss: float
+    diversity_gain: float
+    fading_margin_cell_edge: float
+    soft_handover_gain: float
+    penetration_loss: float
+    bs_height: float  # Hauteur de la station de base
+    ue_height: float  # Hauteur de l'équipement utilisateur
+    decay_law: float  # Loi de décroissance
+
+# Endpoint de connexion
+@app.post("/login/")
+def login(user: UserLogin):
+    if verify_user(user.username, user.password):
+        return {"message": "Connexion réussie"}
+    raise HTTPException(status_code=401, detail="Identifiants invalides")
+
+# Endpoint de calcul du Link Budget
+@app.post("/calculate/")
+def calculate_link_budget(params: LinkBudgetParams):
+    # Calculs de base
+    d = params.tx_power + params.tx_antenna_gain + params.cable_losses
+    n = params.thermal_noise_density + params.noise_figure + params.interference_to_noise + params.bandwidth_factor
+    t = n + 2.20  # Average Eb/No (dB) est fixé à 2.20 pour cet exemple
+    x = d + t + params.rx_antenna_gain + params.cable_feeder_loss + params.diversity_gain + params.fading_margin_cell_edge + params.soft_handover_gain + params.penetration_loss
+    
+    # Calcul du rayon de cellule selon le modèle COST 231
+    path_loss = x  # Utiliser la perte de chemin calculée
+    distance = 10 ** ((path_loss + 46.3 + 33.9 * math.log10(params.tx_power) - 13.82 * math.log10(params.bs_height)) / (44.9 - 6.55 * math.log10(params.ue_height)))
+    
+    # Calcul de la marge de fading
+    fading_margin = params.fading_margin_cell_edge  # Utiliser la marge de fading fournie
+    coverage_probability_cell_edge = 0.85  # Probabilité de couverture au bord de la cellule
+    fade_margin_whole_cell = fading_margin + 14.46  # Exemple de calcul de la marge de fading pour toute la cellule
+    # Surface cellule Tozeur = 1.92 * 26 * (Rayon cellule)^2
+    surface_cellule = 1.92 * 26 * (distance ** 2)
+
+    # Nombre de sites Tozeur = 32 / surface cellule
+    surface_totale_tozeur = 32  # en km²
+    nombre_sites_tozeur = surface_totale_tozeur / surface_cellule
+
+    return {
+        "EIRP": d,
+        "Noise Density": n,
+        "Interference Noise Density": t,
+        "Rx Sensitivity": x,
+        "Max Path Loss": x,
+        "COST 231 Cell Radius (km)": distance,
+        "Fade Margin - Whole Cell (dB)": fade_margin_whole_cell,
+        "Surface Cellule Tozeur (km²)": surface_cellule,
+        "Nombre Sites Tozeur": nombre_sites_tozeur
+    }
+# Pour exécuter l'API :
+# uvicorn backend:app --reload
