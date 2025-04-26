@@ -1,0 +1,38 @@
+import mysql.connector
+from datetime import datetime
+
+# Connexion à la base de données
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="zaineb2002",
+        database="5g"
+    )
+def savedb(username: str, results: dict):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    query = """
+        INSERT INTO results (
+            username, eirp, noise_density, interference_noise_density,
+            rx_sensitivity, max_path_loss, cell_radius_km, fade_margin_cell,
+            surface_cellule, nombre_sites
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    values = (
+        username,
+        results["EIRP"],
+        results["Noise Density"],
+        results["Interference Noise Density"],
+        results["Rx Sensitivity"],
+        results["Max Path Loss"],
+        results["COST 231 Cell Radius (km)"],
+        results["Fade Margin - Whole Cell (dB)"],
+        results["Surface Cellule Tozeur (km²)"],
+        results["Nombre Sites Tozeur"]
+    )
+    cursor.execute(query, values) #Lancer l’exécution 
+    conn.commit() # sauvegarder les données
+    cursor.close()
+    conn.close()
